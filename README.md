@@ -87,6 +87,118 @@ Lo que **no** está animado es el vuelo de Flygon y el vaivén en ocho de
 Volbeat: en el juego se mueven con curvas seno propias, y eso es composición,
 no escenario. Los tienes pedaleando y aleteando en su sitio.
 
+## Editor visual
+
+```bash
+python3 editor/serve.py
+```
+
+y abre `http://127.0.0.1:8777/editor/`. Es el mismo `scene.json`, pero con
+una vista: la escena se reproduce en bucle mientras la editas.
+
+- **Arrastra los sprites** por el lienzo para colocarlos. Si el actor tiene
+  posiciones clave, arrastrar mueve la clave seleccionada (o la más cercana al
+  fotograma en el que estés), no el actor entero.
+- **La línea de tiempo** de abajo muestra las claves del actor elegido como
+  rombos. Pinchas para moverte por el bucle, arrastras el rombo para
+  seleccionarlo, y *+ Clave aquí* añade una en el fotograma actual con la
+  posición que tenga en ese momento.
+- **El panel de la derecha** lleva cámara (zoom, fondo, duración), la lista de
+  actores y sus propiedades: sprite, retardo, profundidad, anclaje, volteo,
+  orden de fotogramas y el vaivén.
+- **Guardar** escribe `scenes/<nombre>.json` y **Renderizar GIF** lanza
+  `compose.py` y te deja el enlace. El cuadro de JSON de abajo está siempre
+  sincronizado en los dos sentidos: puedes pegar uno y darle a *Aplicar*.
+
+El editor avisa en rojo cuando el ciclo de un actor no divide la duración del
+bucle, que es el fallo fácil de cometer y difícil de ver.
+
+El dibujado del editor y el de `compose.py` son la misma lógica escrita dos
+veces, así que están comprobados uno contra otro: el mismo fotograma sale
+idéntico píxel a píxel en los 1280x640. Lo que ves es lo que se renderiza.
+
+Sirve el directorio del proyecto para poder leer los sprites, se ata a
+localhost, y sus dos endpoints sólo escriben y leen dentro de `scenes/`.
+
+## Componer la escena: `compose.py`
+
+Aseprite es bueno dibujando sprites y malo componiendo: no tiene interpolación
+entre posiciones clave, así que cualquier movimiento acaba siendo celdas
+dibujadas una a una — 64 fotogramas por 10 capas de puntos en la línea de
+tiempo. Por eso la composición vive en un archivo de datos:
+
+```bash
+python3 compose.py scenes/wide.json --format gif mp4
+```
+
+`scenes/wide.json` describe la escena entera. Cambiar cuánto te alejas, qué
+Pokémon salen o por dónde pasan es editar ese archivo y volver a lanzarlo.
+
+### Cámara
+
+`zoom` es el aumento entero. Con el lienzo de 1280x640: `zoom: 4` enseña
+320x160 px de GBA (personajes al tamaño de siempre), `zoom: 3` enseña 427x214
+y los deja al 75%, `zoom: 2` al 50%.
+
+El suelo queda **pegado a la base del lienzo**, así que alejarse añade cielo
+por arriba y todo lo que pisa la hierba se queda donde está. Ese cielo extra
+lo rellena la fila superior de la capa lejana: la GBA nunca enseña esa zona,
+tiene el color de fondo sin asignar, y sale negro si no se hace nada.
+
+### Actores
+
+Coordenadas en píxeles de GBA, `y: 152` es la hierba.
+
+```json
+{
+  "name": "mudkip",
+  "sprite": "external/mudkip_walk.png",
+  "frames": 3,
+  "order": [0, 1, 2, 1],
+  "delay": 8,
+  "flip_x": true,
+  "anchor": "bottom-center",
+  "depth": 25,
+  "keys": [
+    { "f": 0,  "x": 300, "y": 150, "ease": "in-out" },
+    { "f": 96, "x": 105, "y": 150, "ease": "in-out" }
+  ],
+  "motion": [ { "type": "sine", "axis": "y", "amp": 1, "period": 32 } ]
+}
+```
+
+- **`keys`** son las posiciones clave. Se interpola entre ellas, con `ease`
+  `linear`, `in`, `out` o `in-out`, y el último tramo vuelve solo al primer
+  key para cerrar el bucle.
+- **`motion`** se suma encima: `sine`, `cosine` o `wobble` (el temblor de 1 px
+  que el juego sortea al azar, aquí periódico), sobre el eje `x` o `y`.
+- **`order`** reordena los fotogramas del sprite. Un ping-pong `[0,1,2,1]`
+  arregla los ciclos de 3 fotogramas, que no dividen los 256 del bucle.
+- **`depth`** decide quién tapa a quién; **`anchor`** dice qué punto del sprite
+  cae en la coordenada (`bottom-center` son los pies).
+
+Si el ciclo de un actor (fotogramas x `delay`) no divide `loop_frames`, el
+sprite pega un salto al reiniciarse. `compose.py` lo detecta y avisa por
+consola diciendo qué actor y con qué número.
+
+## Meter sprites de fuera
+
+Las hojas sacadas de otros sitios traen los fotogramas a distancias
+irregulares y cada uno con su propio desplazamiento, lo que hace que el sprite
+tiemble al animarse. `import_sprite.py` los encuentra, les da una caja común y
+los alinea:
+
+```bash
+python3 import_sprite.py out/Walk-Anim-export.png --name mudkip_walk
+```
+
+Por defecto los alinea por `bottom-center`, que es lo que quieren los ciclos de
+andar: los pies se quedan clavados. Sale en `sprites/x*/external/`.
+
+El Mudkip de Mystery Dungeon que ya está metido mide 22x22 frente a los 18x24
+de Torchic, así que la escala pega casi exacta pese a ser otro estilo. Lleva
+`flip_x` porque mira al lado contrario que el resto.
+
 ## Cambiar los Pokémon
 
 Los seis de la escena están dibujados de perfil y en movimiento, que es lo que
@@ -138,15 +250,13 @@ aseprite -b --script-param root=sprites/x4 --script-param scene=day --script mak
 `export_sprites.py --scale 1 2 4 8` saca las escalas que quieras (siempre
 nearest-neighbour, sin suavizado).
 
-## El vídeo
+## Los otros dos caminos
 
-`render_bike_loop.py` reconstruye la escena entera y la exporta como GIF o
-MP4, con el loop cerrado al fotograma. `gba.py` es el mini-renderizador que
-usa: tiles 4bpp, fondos con screenblocks de 32x32 y OBJs con mapeo de tiles 1D.
+`render_bike_loop.py` reproduce la escena tal cual sale en el juego, sin
+parametrizar: sirve de referencia para comparar. `gba.py` es el
+mini-renderizador que comparten los tres: tiles 4bpp, fondos con screenblocks
+de 32x32 y OBJs con mapeo de tiles 1D.
 
-```bash
-python3 render_bike_loop.py --scene sunset --scale 4 --format gif mp4
-```
-
-Los resultados están en `out/` (escala 4) y `out/light/` (escala 2, más
-ligeros).
+Las plantillas `.aseprite` con el escenario ya animado siguen ahí y siguen
+funcionando; para composición `compose.py` es más manejable, pero si prefieres
+mover cosas a mano en Aseprite, ese camino no se ha roto.

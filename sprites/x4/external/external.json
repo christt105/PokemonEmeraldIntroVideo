@@ -1,0 +1,10 @@
+{
+  "mudkip_walk": {
+    "file": "mudkip_walk.png",
+    "frames": 3,
+    "frame_delay_gba": 6,
+    "frame_ms": 100.5,
+    "frame_width": 88,
+    "frame_height": 88
+  }
+}

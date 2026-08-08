@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de escena — bici de Esmeralda</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1c1f27; --line: #2c313d; --ink: #e6e9ef;
+    --dim: #949cad; --accent: #7fd4a0; --key: #f0b45e; --danger: #e2705f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 ui-sans-serif, system-ui, sans-serif;
+    display: grid; grid-template-columns: 1fr 320px; height: 100vh;
+  }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  main { display: flex; flex-direction: column; min-width: 0; padding: 12px; gap: 10px; }
+  #stage { background: #000; border: 1px solid var(--line); border-radius: 6px;
+           overflow: hidden; display: flex; align-items: center;
+           justify-content: center; flex: 1; min-height: 0; }
+  canvas { image-rendering: pixelated; max-width: 100%; max-height: 100%;
+           cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+  aside { background: var(--panel); border-left: 1px solid var(--line);
+          overflow-y: auto; padding: 12px; display: flex;
+          flex-direction: column; gap: 14px; }
+  section { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  section:last-child { border-bottom: 0; }
+  label { display: block; color: var(--dim); font-size: 11px; margin-bottom: 2px; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > * { min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  input, select, textarea, button {
+    font: inherit; background: #12141a; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; width: 100%;
+  }
+  input[type=range] { padding: 0; }
+  button { cursor: pointer; background: #262b36; }
+  button:hover { background: #313846; }
+  button.primary { background: var(--accent); color: #10241a; border-color: var(--accent);
+                   font-weight: 600; }
+  button.ghost { background: transparent; }
+  button.danger { color: var(--danger); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li.actor { display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+             border-radius: 4px; cursor: pointer; }
+  li.actor:hover { background: #232833; }
+  li.actor.sel { background: #2b3a33; outline: 1px solid var(--accent); }
+  li.actor .nm { flex: 1; overflow: hidden; text-overflow: ellipsis;
+                 white-space: nowrap; }
+  #timeline { position: relative; height: 34px; background: #12141a;
+              border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  #playhead { position: absolute; top: 0; bottom: 0; width: 2px;
+              background: var(--accent); pointer-events: none; }
+  .kf { position: absolute; top: 50%; width: 11px; height: 11px;
+        margin: -6px 0 0 -6px; background: var(--key); border-radius: 2px;
+        transform: rotate(45deg); cursor: grab; }
+  .kf.sel { outline: 2px solid #fff; }
+  #status { color: var(--dim); font-size: 11px; min-height: 1.5em; }
+  #status.err { color: var(--danger); }
+  #status.ok { color: var(--accent); }
+  .hint { color: var(--dim); font-size: 11px; }
+  textarea { height: 130px; font-family: ui-monospace, monospace; font-size: 11px;
+             resize: vertical; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tools button { width: auto; flex: 1; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row">
+    <button id="play" style="width:auto">⏸ Pausa</button>
+    <input type="range" id="scrub" min="0" value="0" step="1">
+    <span id="fnum" class="hint" style="width:6em;text-align:right"></span>
+  </div>
+  <div id="stage"><canvas id="view"></canvas></div>
+  <div>
+    <h2>Línea de tiempo <span class="hint" id="tlwho"></span></h2>
+    <div id="timeline"><div id="playhead"></div></div>
+    <div class="tools" style="margin-top:6px">
+      <button id="addkey">+ Clave aquí</button>
+      <button id="delkey" class="danger">− Borrar clave</button>
+    </div>
+  </div>
+  <div id="status"></div>
+</main>
+
+<aside>
+  <section>
+    <h2>Cámara</h2>
+    <div class="grid2">
+      <div><label>Zoom</label><input type="number" id="zoom" min="1" max="8" step="1"></div>
+      <div><label>Fotogramas</label><input type="number" id="loop" min="16" step="16"></div>
+    </div>
+    <label style="margin-top:6px">Fondo</label>
+    <select id="background"></select>
+    <p class="hint" id="viewinfo"></p>
+  </section>
+
+  <section>
+    <h2>Actores</h2>
+    <ul id="actors"></ul>
+    <div class="row" style="margin-top:6px">
+      <select id="newsprite"></select>
+      <button id="add" style="width:auto">Añadir</button>
+    </div>
+  </section>
+
+  <section id="props" hidden>
+    <h2>Propiedades</h2>
+    <label>Nombre</label><input id="p_name">
+    <label style="margin-top:6px">Sprite</label><select id="p_sprite"></select>
+    <div class="grid2" style="margin-top:6px">
+      <div><label>x</label><input type="number" id="p_x"></div>
+      <div><label>y</label><input type="number" id="p_y"></div>
+      <div><label>Retardo</label><input type="number" id="p_delay" min="1"></div>
+      <div><label>Profundidad</label><input type="number" id="p_depth"></div>
+    </div>
+    <label style="margin-top:6px">Orden de fotogramas</label>
+    <input id="p_order" placeholder="0,1,2,1">
+    <div class="grid2" style="margin-top:6px">
+      <div><label>Anclaje</label><select id="p_anchor">
+        <option value="bottom-center">pies</option>
+        <option value="center">centro</option>
+        <option value="top-left">esquina</option>
+      </select></div>
+      <div><label>Voltear</label><select id="p_flip">
+        <option value="false">no</option><option value="true">sí</option>
+      </select></div>
+    </div>
+    <label style="margin-top:6px">Vaivén (motion)</label>
+    <div class="row">
+      <select id="m_type">
+        <option value="">ninguno</option>
+        <option value="sine">seno</option>
+        <option value="cosine">coseno</option>
+        <option value="wobble">temblor</option>
+      </select>
+      <select id="m_axis" style="width:70px"><option value="y">y</option><option value="x">x</option></select>
+    </div>
+    <div class="grid2" style="margin-top:6px">
+      <div><label>Amplitud</label><input type="number" id="m_amp" step="1"></div>
+      <div><label>Periodo</label><input type="number" id="m_period" step="8"></div>
+    </div>
+    <div class="tools" style="margin-top:8px">
+      <button id="dup">Duplicar</button>
+      <button id="del" class="danger">Eliminar</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Escena</h2>
+    <div class="row"><input id="scenename" value="wide"><button id="save" class="primary" style="width:auto">Guardar</button></div>
+    <div class="tools" style="margin-top:6px">
+      <button id="load">Recargar</button>
+      <button id="render">Renderizar GIF</button>
+    </div>
+    <label style="margin-top:8px">JSON</label>
+    <textarea id="json" spellcheck="false"></textarea>
+    <div class="tools" style="margin-top:6px">
+      <button id="apply">Aplicar JSON</button>
+      <button id="copy" class="ghost">Copiar</button>
+    </div>
+  </section>
+</aside>
+
+<script>
+'use strict';
+
+const WORLD_H = 160;           // the scene was authored for a 160 px tall screen
+const CANVAS = [1280, 640];
+const SPRITE_ROOT = '../sprites/x1';
+const DEFAULT_SPEEDS = { far: 0, near: 1, ground: 4 };
+
+const $ = id => document.getElementById(id);
+const el = { view: $('view'), stage: $('stage'), status: $('status') };
+const ctx = el.view.getContext('2d');
+
+let meta = null;              // sprites.json
+let catalog = {};             // "pokemon/torchic_walk.png" -> {frames, delay, ...}
+let images = new Map();       // path -> HTMLImageElement
+let scene = null;
+let sel = -1;                 // selected actor index
+let selKey = -1;              // selected keyframe index
+let frame = 0, playing = true, lastT = 0;
+
+function say(msg, kind = '') { el.status.textContent = msg; el.status.className = kind; }
+
+function loadImage(src) {
+  if (images.has(src)) return images.get(src);
+  const img = new Image();
+  img.src = src;
+  images.set(src, img);
+  return img;
+}
+
+// ---------------------------------------------------------------- catalog --
+async function fetchJSON(url) {
+  try { const r = await fetch(url); return r.ok ? await r.json() : null; }
+  catch { return null; }
+}
+
+async function buildCatalog() {
+  meta = await fetchJSON(`${SPRITE_ROOT}/sprites.json`);
+  if (!meta) throw new Error('no encuentro sprites/x1/sprites.json — ¿lanzaste el servidor desde la raíz del proyecto?');
+
+  for (const group of ['characters', 'pokemon']) {
+    for (const [name, anims] of Object.entries(meta[group] || {})) {
+      for (const [anim, info] of Object.entries(anims)) {
+        catalog[`${group}/${info.file}`] = {
+          label: `${name} · ${anim}`,
+          frames: info.frames,
+          delay: info.frame_delay_gba || 4,
+          order: info.source_frames && info.source_frames.length === info.frames
+                 ? null : null,
+        };
+      }
+    }
+  }
+  for (const [dir, file] of [['external', 'external.json'],
+                             ['pokemon_extra', 'pokemon_extra.json']]) {
+    const extra = await fetchJSON(`${SPRITE_ROOT}/${dir}/${file}`);
+    if (!extra) continue;
+    for (const [name, info] of Object.entries(extra)) {
+      if (info.file) {
+        catalog[`${dir}/${info.file}`] = {
+          label: `${name}`, frames: info.frames,
+          delay: info.frame_delay_gba || 6,
+        };
+      } else {
+        for (const [view, v] of Object.entries(info)) {
+          if (v && v.file) catalog[`${dir}/${v.file}`] =
+            { label: `${name} · ${view}`, frames: v.frames, delay: v.frame_delay_gba || 20 };
+        }
+      }
+    }
+  }
+}
+
+function fillSpriteSelects() {
+  const opts = Object.entries(catalog)
+    .sort((a, b) => a[1].label.localeCompare(b[1].label))
+    .map(([path, c]) => `<option value="${path}">${c.label}</option>`).join('');
+  $('newsprite').innerHTML = opts;
+  $('p_sprite').innerHTML = opts;
+  $('background').innerHTML = Object.keys(meta.backgrounds)
+    .map(n => `<option value="${n}">${n}</option>`).join('');
+}
+
+// ------------------------------------------------------------------ motion --
+function ease(t, kind) {
+  if (kind === 'in-out') return t * t * (3 - 2 * t);
+  if (kind === 'in') return t * t;
+  if (kind === 'out') return t * (2 - t);
+  return t;
+}
+
+function sampleKeys(keys, f, loop) {
+  f = ((f % loop) + loop) % loop;
+  const ks = [...keys].sort((a, b) => a.f - b.f);
+  if (ks.length === 1) return [ks[0].x || 0, ks[0].y || 0];
+  const ring = ks.concat([{ ...ks[0], f: ks[0].f + loop }]);
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i], b = ring[i + 1];
+    if (a.f <= f && f < b.f) {
+      const span = b.f - a.f;
+      const t = span ? ease((f - a.f) / span, a.ease || 'linear') : 0;
+      return [(a.x || 0) + ((b.x || 0) - (a.x || 0)) * t,
+              (a.y || 0) + ((b.y || 0) - (a.y || 0)) * t];
+    }
+  }
+  const last = ks[ks.length - 1];
+  return [last.x || 0, last.y || 0];
+}
+
+function applyMotion(motion, f, loop) {
+  let dx = 0, dy = 0;
+  for (const m of motion || []) {
+    const amp = m.amp || 0, period = m.period || loop;
+    let v;
+    if (m.type === 'wobble') {
+      v = amp * [0, -1, 0, 1][Math.floor(f / Math.max(1, m.hold || 8)) % 4];
+    } else {
+      const th = 2 * Math.PI * (f / period) + (m.phase || 0) * Math.PI / 180;
+      v = amp * (m.type === 'cosine' ? Math.cos(th) : Math.sin(th));
+    }
+    if ((m.axis || 'y') === 'x') dx += v; else dy += v;
+  }
+  return [dx, dy];
+}
+
+function anchorOffset(anchor, w, h) {
+  if (anchor === 'center') return [-w / 2, -h / 2];
+  if (anchor === 'top-left') return [0, 0];
+  return [-w / 2, -h];
+}
+
+function actorPos(a, f, loop) {
+  const [bx, by] = a.keys && a.keys.length ? sampleKeys(a.keys, f, loop)
+                                          : [a.x || 0, a.y || 0];
+  const [mx, my] = applyMotion(a.motion, f, loop);
+  return [bx + mx, by + my];
+}
+
+function actorFrameSize(a) {
+  const img = loadImage(`${SPRITE_ROOT}/${a.sprite}`);
+  const n = a.frames || 1;
+  if (!img.complete || !img.naturalWidth) return [0, 0, img, n];
+  return [img.naturalWidth / n, img.naturalHeight, img, n];
+}
+
+// ------------------------------------------------------------------ render --
+function viewSize() {
+  const z = scene.zoom || 4;
+  return [Math.ceil(CANVAS[0] / z), Math.ceil(CANVAS[1] / z), z];
+}
+
+function drawTiled(img, info, offset, dy, vw, vh, extendUp) {
+  if (!img.complete || !img.naturalWidth) return;
+  const period = info.tile_period || 256;
+  const y0 = (info.y || 0) + dy;
+  const x = -period + (((offset % period) + period) % period);
+  if (extendUp && y0 > 0) {
+    // the GBA never shows above the far layer, so its backdrop is unset —
+    // repeat the top row of sky instead of leaving it black
+    ctx.drawImage(img, 0, 0, img.naturalWidth, 1, x, 0, img.naturalWidth, y0);
+  }
+  ctx.drawImage(img, x, y0);
+}
+
+function render() {
+  const [vw, vh, z] = viewSize();
+  if (el.view.width !== vw || el.view.height !== vh) {
+    el.view.width = vw; el.view.height = vh;
+    el.view.style.width = CANVAS[0] + 'px';
+    el.view.style.height = CANVAS[1] + 'px';
+  }
+  const bg = meta.backgrounds[scene.background];
+  const dy = vh - WORLD_H;
+  const speeds = Object.assign({}, DEFAULT_SPEEDS, scene.layer_speeds || {});
+  const dir = `${SPRITE_ROOT}/backgrounds/${scene.background}`;
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = `rgb(${bg.backdrop_rgb.join(',')})`;
+  ctx.fillRect(0, 0, vw, vh);
+
+  if (bg.layers.far)
+    drawTiled(loadImage(`${dir}/far.png`), bg.layers.far, speeds.far * frame, dy, vw, vh, true);
+
+  const scenery = Object.entries(bg.scenery_layers || {})
+    .sort((a, b) => a[1].scroll_px_per_gba_frame - b[1].scroll_px_per_gba_frame);
+  for (const [name, info] of scenery)
+    drawTiled(loadImage(`${dir}/${info.file}`), info,
+              info.scroll_px_per_gba_frame * frame, dy, vw, vh, false);
+
+  for (const name of ['near', 'ground'])
+    if (bg.layers[name])
+      drawTiled(loadImage(`${dir}/${name}.png`), bg.layers[name],
+                speeds[name] * frame, dy, vw, vh, false);
+
+  const loop = scene.loop_frames || 256;
+  const cast = scene.actors.map((a, i) => [a, i])
+    .sort((p, q) => (p[0].depth || 0) - (q[0].depth || 0));
+
+  for (const [a, idx] of cast) {
+    const [fw, fh, img, n] = actorFrameSize(a);
+    if (!fw) continue;
+    const order = (a.order && a.order.length) ? a.order : [...Array(n).keys()];
+    const fi = order[Math.floor(frame / Math.max(1, a.delay || 4)) % order.length];
+    const [px, py] = actorPos(a, frame, loop);
+    const [ax, ay] = anchorOffset(a.anchor || 'bottom-center', fw, fh);
+    const dx = Math.round(px + ax), dyy = Math.round(py + ay) + dy;
+
+    ctx.save();
+    if (a.flip_x) {
+      ctx.translate(dx + fw, dyy); ctx.scale(-1, 1);
+      ctx.drawImage(img, fi * fw, 0, fw, fh, 0, 0, fw, fh);
+    } else {
+      ctx.drawImage(img, fi * fw, 0, fw, fh, dx, dyy, fw, fh);
+    }
+    ctx.restore();
+
+    if (idx === sel) {
+      ctx.strokeStyle = '#7fd4a0'; ctx.lineWidth = 1;
+      ctx.strokeRect(dx + 0.5, dyy + 0.5, fw - 1, fh - 1);
+    }
+  }
+  $('viewinfo').textContent =
+    `se ven ${vw}×${vh} px de GBA · lienzo ${CANVAS[0]}×${CANVAS[1]}`;
+}
+
+// ------------------------------------------------------------------- input --
+function canvasToWorld(ev) {
+  const r = el.view.getBoundingClientRect();
+  const [vw, vh] = viewSize();
+  const x = (ev.clientX - r.left) * vw / r.width;
+  const y = (ev.clientY - r.top) * vh / r.height - (vh - WORLD_H);
+  return [x, y];
+}
+
+function hitTest(wx, wy) {
+  const loop = scene.loop_frames || 256;
+  const cast = scene.actors.map((a, i) => [a, i])
+    .sort((p, q) => (q[0].depth || 0) - (p[0].depth || 0));
+  for (const [a, i] of cast) {
+    const [fw, fh] = actorFrameSize(a);
+    if (!fw) continue;
+    const [px, py] = actorPos(a, frame, loop);
+    const [ax, ay] = anchorOffset(a.anchor || 'bottom-center', fw, fh);
+    if (wx >= px + ax && wx <= px + ax + fw && wy >= py + ay && wy <= py + ay + fh)
+      return i;
+  }
+  return -1;
+}
+
+let drag = null;
+el.view.addEventListener('pointerdown', ev => {
+  const [wx, wy] = canvasToWorld(ev);
+  const hit = hitTest(wx, wy);
+  if (hit < 0) return;
+  selectActor(hit);
+  const a = scene.actors[hit];
+  const loop = scene.loop_frames || 256;
+  const [px, py] = actorPos(a, frame, loop);
+  drag = { dx: wx - px, dy: wy - py };
+  el.view.setPointerCapture(ev.pointerId);
+  el.view.classList.add('dragging');
+});
+
+el.view.addEventListener('pointermove', ev => {
+  if (!drag || sel < 0) return;
+  const [wx, wy] = canvasToWorld(ev);
+  const a = scene.actors[sel];
+  const loop = scene.loop_frames || 256;
+  const [mx, my] = applyMotion(a.motion, frame, loop);
+  const nx = Math.round(wx - drag.dx - mx), ny = Math.round(wy - drag.dy - my);
+
+  if (a.keys && a.keys.length) {
+    // move the keyframe nearest to (or exactly at) the current frame
+    let k = selKey >= 0 ? selKey : 0, best = Infinity;
+    if (selKey < 0) a.keys.forEach((kk, i) => {
+      const d = Math.abs(kk.f - frame);
+      if (d < best) { best = d; k = i; }
+    });
+    a.keys[k].x = nx; a.keys[k].y = ny;
+  } else { a.x = nx; a.y = ny; }
+  syncProps(); syncJSON(); drawTimeline();
+});
+
+const endDrag = () => { drag = null; el.view.classList.remove('dragging'); };
+el.view.addEventListener('pointerup', endDrag);
+el.view.addEventListener('pointercancel', endDrag);
+
+// ---------------------------------------------------------------- timeline --
+function drawTimeline() {
+  const tl = $('timeline');
+  [...tl.querySelectorAll('.kf')].forEach(n => n.remove());
+  const loop = scene.loop_frames || 256;
+  $('tlwho').textContent = sel < 0 ? '— elige un actor'
+    : (scene.actors[sel].name || scene.actors[sel].sprite);
+  if (sel < 0) return;
+  const a = scene.actors[sel];
+  (a.keys || []).forEach((k, i) => {
+    const d = document.createElement('div');
+    d.className = 'kf' + (i === selKey ? ' sel' : '');
+    d.style.left = (k.f / loop * 100) + '%';
+    d.title = `f=${k.f}  x=${k.x}  y=${k.y}`;
+    d.addEventListener('pointerdown', ev => {
+      ev.stopPropagation(); selKey = i; frame = k.f; drawTimeline(); syncScrub();
+    });
+    tl.appendChild(d);
+  });
+}
+
+$('timeline').addEventListener('pointerdown', ev => {
+  const r = $('timeline').getBoundingClientRect();
+  const loop = scene.loop_frames || 256;
+  frame = Math.max(0, Math.min(loop - 1,
+    Math.round((ev.clientX - r.left) / r.width * loop)));
+  playing = false; $('play').textContent = '▶ Reproducir';
+  selKey = -1; syncScrub(); drawTimeline();
+});
+
+$('addkey').onclick = () => {
+  if (sel < 0) return say('elige un actor primero', 'err');
+  const a = scene.actors[sel];
+  const loop = scene.loop_frames || 256;
+  const [x, y] = a.keys && a.keys.length ? sampleKeys(a.keys, frame, loop)
+                                         : [a.x || 0, a.y || 0];
+  a.keys = (a.keys || []).filter(k => k.f !== frame);
+  a.keys.push({ f: frame, x: Math.round(x), y: Math.round(y), ease: 'in-out' });
+  a.keys.sort((p, q) => p.f - q.f);
+  delete a.x; delete a.y;
+  selKey = a.keys.findIndex(k => k.f === frame);
+  drawTimeline(); syncJSON(); checkCycle(a);
+  say(`clave añadida en el fotograma ${frame}`, 'ok');
+};
+
+$('delkey').onclick = () => {
+  if (sel < 0 || selKey < 0) return say('elige una clave', 'err');
+  const a = scene.actors[sel];
+  a.keys.splice(selKey, 1);
+  if (!a.keys.length) { delete a.keys; a.x = 0; a.y = 150; }
+  selKey = -1; drawTimeline(); syncJSON();
+};
+
+// ------------------------------------------------------------------ actors --
+function selectActor(i) {
+  sel = i; selKey = -1;
+  [...$('actors').children].forEach((li, k) => li.classList.toggle('sel', k === i));
+  syncProps(); drawTimeline();
+}
+
+function listActors() {
+  $('actors').innerHTML = scene.actors.map((a, i) =>
+    `<li class="actor${i === sel ? ' sel' : ''}" data-i="${i}">
+       <span class="nm">${a.name || a.sprite}</span>
+       <span class="hint">${a.keys ? a.keys.length + ' claves' : 'fija'}</span>
+     </li>`).join('');
+  [...$('actors').children].forEach(li =>
+    li.onclick = () => selectActor(+li.dataset.i));
+}
+
+function checkCycle(a) {
+  const loop = scene.loop_frames || 256;
+  const n = (a.order && a.order.length) ? a.order.length : (a.frames || 1);
+  const cycle = n * Math.max(1, a.delay || 4);
+  if (loop % cycle) say(
+    `ojo: ${a.name || a.sprite} cicla cada ${cycle} fotogramas y ${loop} no es ` +
+    `múltiplo — dará un salto al reiniciar (prueba orden 0,1,2,1 o cambia el retardo)`, 'err');
+  else say('');
+}
+
+$('add').onclick = () => {
+  const path = $('newsprite').value;
+  const c = catalog[path];
+  const a = { name: c.label.split(' · ')[0], sprite: path, frames: c.frames,
+              delay: c.delay, x: 160, y: 150, anchor: 'bottom-center',
+              depth: (scene.actors.length + 1) * 10 };
+  scene.actors.push(a);
+  listActors(); selectActor(scene.actors.length - 1); syncJSON(); checkCycle(a);
+};
+
+$('dup').onclick = () => {
+  if (sel < 0) return;
+  const copy = JSON.parse(JSON.stringify(scene.actors[sel]));
+  copy.name = (copy.name || 'actor') + '_2';
+  scene.actors.push(copy); listActors(); selectActor(scene.actors.length - 1); syncJSON();
+};
+
+$('del').onclick = () => {
+  if (sel < 0) return;
+  scene.actors.splice(sel, 1); sel = -1; selKey = -1;
+  listActors(); $('props').hidden = true; syncJSON(); drawTimeline();
+};
+
+// ------------------------------------------------------------------- props --
+function syncProps() {
+  const on = sel >= 0;
+  $('props').hidden = !on;
+  if (!on) return;
+  const a = scene.actors[sel];
+  const loop = scene.loop_frames || 256;
+  $('p_name').value = a.name || '';
+  $('p_sprite').value = a.sprite;
+  const [x, y] = a.keys && a.keys.length
+    ? (selKey >= 0 ? [a.keys[selKey].x, a.keys[selKey].y] : sampleKeys(a.keys, frame, loop))
+    : [a.x || 0, a.y || 0];
+  $('p_x').value = Math.round(x); $('p_y').value = Math.round(y);
+  $('p_delay').value = a.delay || 4;
+  $('p_depth').value = a.depth || 0;
+  $('p_order').value = (a.order || []).join(',');
+  $('p_anchor').value = a.anchor || 'bottom-center';
+  $('p_flip').value = a.flip_x ? 'true' : 'false';
+  const m = (a.motion || [])[0] || {};
+  $('m_type').value = m.type || '';
+  $('m_axis').value = m.axis || 'y';
+  $('m_amp').value = m.amp ?? 0;
+  $('m_period').value = m.period ?? 64;
+}
+
+function readProps() {
+  if (sel < 0) return;
+  const a = scene.actors[sel];
+  a.name = $('p_name').value || undefined;
+  if (a.sprite !== $('p_sprite').value) {
+    a.sprite = $('p_sprite').value;
+    a.frames = catalog[a.sprite].frames;
+    delete a.order;
+  }
+  const nx = +$('p_x').value, ny = +$('p_y').value;
+  if (a.keys && a.keys.length && selKey >= 0) { a.keys[selKey].x = nx; a.keys[selKey].y = ny; }
+  else if (!a.keys) { a.x = nx; a.y = ny; }
+  a.delay = Math.max(1, +$('p_delay').value || 4);
+  a.depth = +$('p_depth').value || 0;
+  const order = $('p_order').value.split(',').map(s => +s.trim())
+    .filter(v => Number.isInteger(v) && v >= 0 && v < (a.frames || 1));
+  if (order.length) a.order = order; else delete a.order;
+  a.anchor = $('p_anchor').value;
+  a.flip_x = $('p_flip').value === 'true';
+  const type = $('m_type').value;
+  if (type) a.motion = [{ type, axis: $('m_axis').value,
+                          amp: +$('m_amp').value || 0,
+                          period: +$('m_period').value || 64 }];
+  else delete a.motion;
+  listActors(); drawTimeline(); syncJSON(); checkCycle(a);
+}
+
+['p_name','p_sprite','p_x','p_y','p_delay','p_depth','p_order','p_anchor',
+ 'p_flip','m_type','m_axis','m_amp','m_period'].forEach(id =>
+  $(id).addEventListener('change', readProps));
+
+// ------------------------------------------------------------------ camera --
+['zoom','loop','background'].forEach(id => $(id).addEventListener('change', () => {
+  scene.zoom = Math.max(1, +$('zoom').value || 4);
+  scene.loop_frames = Math.max(16, +$('loop').value || 256);
+  scene.background = $('background').value;
+  $('scrub').max = scene.loop_frames - 1;
+  frame = Math.min(frame, scene.loop_frames - 1);
+  syncJSON(); drawTimeline();
+}));
+
+// -------------------------------------------------------------------- json --
+function syncJSON() { $('json').value = JSON.stringify(scene, null, 2); }
+
+$('apply').onclick = () => {
+  try {
+    const next = JSON.parse($('json').value);
+    if (!Array.isArray(next.actors)) throw new Error('falta "actors"');
+    scene = next; sel = -1; selKey = -1;
+    syncCamera(); listActors(); $('props').hidden = true; drawTimeline();
+    say('JSON aplicado', 'ok');
+  } catch (e) { say('JSON inválido: ' + e.message, 'err'); }
+};
+
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('json').value); say('copiado', 'ok'); }
+  catch { say('no he podido copiar; selecciona el texto a mano', 'err'); }
+};
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+$('save').onclick = async () => {
+  try {
+    const d = await post('/api/save', { name: $('scenename').value, scene });
+    say('guardado en ' + d.saved, 'ok');
+  } catch (e) { say('no se pudo guardar: ' + e.message, 'err'); }
+};
+
+$('load').onclick = async () => {
+  const name = $('scenename').value;
+  const data = await fetchJSON(`../scenes/${name}.json`);
+  if (!data) return say(`no encuentro scenes/${name}.json`, 'err');
+  scene = data; sel = -1; selKey = -1;
+  syncCamera(); listActors(); $('props').hidden = true; syncJSON(); drawTimeline();
+  say('cargada ' + name, 'ok');
+};
+
+$('render').onclick = async () => {
+  say('renderizando… (unos segundos)');
+  $('render').disabled = true;
+  try {
+    await post('/api/save', { name: $('scenename').value, scene });
+    const d = await post('/api/render', { name: $('scenename').value, step: 2 });
+    // a link, not window.open: navigating away would drop the editor state
+    el.status.className = 'ok';
+    el.status.innerHTML =
+      `listo: <a href="../${d.file}" target="_blank" style="color:inherit">${d.file}</a>`;
+  } catch (e) { say('el render falló: ' + e.message, 'err'); }
+  finally { $('render').disabled = false; }
+};
+
+// ---------------------------------------------------------------- playback --
+$('play').onclick = () => {
+  playing = !playing;
+  $('play').textContent = playing ? '⏸ Pausa' : '▶ Reproducir';
+};
+
+$('scrub').addEventListener('input', () => {
+  frame = +$('scrub').value; playing = false;
+  $('play').textContent = '▶ Reproducir';
+});
+
+function syncScrub() {
+  $('scrub').value = frame;
+  $('fnum').textContent = `${frame} / ${(scene.loop_frames || 256) - 1}`;
+  $('playhead').style.left = (frame / (scene.loop_frames || 256) * 100) + '%';
+}
+
+function syncCamera() {
+  $('zoom').value = scene.zoom || 4;
+  $('loop').value = scene.loop_frames || 256;
+  $('background').value = scene.background;
+  $('scrub').max = (scene.loop_frames || 256) - 1;
+}
+
+function tick(t) {
+  const loop = scene ? (scene.loop_frames || 256) : 256;
+  const fps = scene ? (scene.fps || 59.7275) : 60;
+  if (playing && t - lastT >= 1000 / fps) {
+    frame = (frame + 1) % loop; lastT = t;
+  }
+  if (scene) { render(); syncScrub(); }
+  requestAnimationFrame(tick);
+}
+
+// Handle for the browser console: poke at the scene, jump to a frame, or force
+// a redraw when the tab is not compositing.
+window.editor = {
+  render, drawTimeline, listActors, syncJSON, catalog,
+  get scene() { return scene; },
+  get frame() { return frame; },
+  set frame(v) { frame = v; render(); syncScrub(); },
+  select: selectActor,
+};
+
+// -------------------------------------------------------------------- boot --
+(async function boot() {
+  try {
+    await buildCatalog();
+    fillSpriteSelects();
+    scene = await fetchJSON('../scenes/wide.json');
+    if (!scene) {
+      scene = { canvas: CANVAS, zoom: 3, loop_frames: 256, fps: 59.7275,
+                sprite_root: 'sprites/x1', background: 'day', actors: [] };
+    }
+    syncCamera(); listActors(); syncJSON(); drawTimeline();
+    say('arrastra los sprites para colocarlos · pincha la línea de tiempo para moverte');
+    requestAnimationFrame(tick);
+  } catch (e) {
+    say(e.message, 'err');
+  }
+})();
+</script>
+</body>
+</html>
