@@ -1,0 +1,4 @@
+*.gba
+__pycache__
+decomp/*
+.claude
