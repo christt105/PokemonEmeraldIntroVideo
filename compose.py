@@ -33,6 +33,15 @@ import export_sprites as ex
 
 WORLD_H = 160  # the scene was authored for a 160 px tall screen
 
+
+def jsround(v):
+    """Round half up, the way Math.round does — Python rounds half to even.
+
+    The editor and this renderer have to land on the same pixel, and a sprite
+    anchored bottom-centre lands on exactly .5 whenever its width is odd.
+    """
+    return math.floor(v + 0.5)
+
 # Layer scroll in GBA px per GBA frame. Rounded from the game's own values so
 # each layer's period divides the loop; see README.
 DEFAULT_SPEEDS = {"far": 0.0, "near": 1.0, "ground": 4.0}
@@ -128,9 +137,14 @@ def apply_motion(motion, f, loop):
 class View:
     """RGBA canvas in GBA pixels, with the world pinned to the bottom."""
 
-    def __init__(self, w, h, backdrop):
+    def __init__(self, w, h, backdrop, world_h=WORLD_H, align="bottom"):
         self.w, self.h = w, h
-        self.dy = h - WORLD_H
+        if align == "top":
+            self.dy = 0
+        elif align == "center":
+            self.dy = (h - world_h) // 2
+        else:
+            self.dy = h - world_h
         self.rgb = np.zeros((h, w, 3), dtype=np.uint8)
         self.rgb[:, :] = backdrop
 
@@ -159,29 +173,80 @@ class View:
         m = px[..., 3] != 0
         band[m] = px[..., :3][m]
 
-    def sprite(self, frame, x, y, flip_x=False):
+    def sprite(self, frame, x, y, flip_x=False, flip_y=False, opacity=1.0):
         """Blit an RGBA frame with its top-left at (x, y) in world space."""
         if flip_x:
             frame = frame[:, ::-1]
+        if flip_y:
+            frame = frame[::-1]
         h, w = frame.shape[:2]
-        x, y = int(round(x)), int(round(y)) + self.dy
+        x, y = jsround(x), jsround(y) + self.dy
         sx0, sy0 = max(0, -x), max(0, -y)
         sx1, sy1 = min(w, self.w - x), min(h, self.h - y)
         if sx0 >= sx1 or sy0 >= sy1:
             return
         sub = frame[sy0:sy1, sx0:sx1]
-        m = sub[..., 3] != 0
         dst = self.rgb[y + sy0 : y + sy1, x + sx0 : x + sx1]
-        dst[m] = sub[..., :3][m]
+        if opacity >= 1.0:
+            m = sub[..., 3] != 0
+            dst[m] = sub[..., :3][m]
+            return
+        # partial alpha: blend, so the result matches what a canvas would show
+        a = (sub[..., 3:4].astype(np.float32) / 255.0) * opacity
+        dst[:] = np.round(dst * (1 - a) + sub[..., :3] * a).astype(np.uint8)
+
+    def png_layer(self, art, spec, f):
+        """A tiled parallax layer described by the portable scene format.
+
+        Positive `speed` scrolls the artwork leftwards, which is the convention
+        the web editor uses; the legacy `layer_speeds` path below scrolls the
+        other way, as the game itself does.
+        """
+        ih, iw = art.shape[:2]
+        period = int(spec.get("tile_period") or iw)
+        shift = jsround(spec.get("speed", 0) * f)
+        y = spec.get("y", 0) - spec.get("speed_y", 0) * f
+        opacity = float(spec.get("opacity", 1))
+
+        if spec.get("repeat") == "none":
+            self.sprite(art, -shift, y, opacity=opacity)
+            xs = [-shift]
+        else:
+            start = -period + ((-shift % period) + period) % period
+            xs = list(range(start, self.w, period))
+            for x in xs:
+                self.sprite(art, x, y, opacity=opacity)
+
+        # The rows above and below a layer usually mean to keep going: sky over
+        # a backdrop, dirt under the ground. Repeat the edge row rather than
+        # asking for art nobody will look at.
+        y0 = jsround(y) + self.dy
+        if spec.get("extend_up") and y0 > 0:
+            band = np.repeat(art[:1], y0, axis=0)
+            for x in xs:
+                self.sprite(band, x, -self.dy, opacity=opacity)
+        if spec.get("extend_down") and y0 + ih < self.h:
+            band = np.repeat(art[-1:], self.h - y0 - ih, axis=0)
+            for x in xs:
+                self.sprite(band, x, y + ih, opacity=opacity)
 
 
 def resolve_anchor(anchor, w, h):
     """Offset from the anchor point to the frame's top-left corner."""
-    if anchor == "center":
-        return -w / 2, -h / 2
-    if anchor == "top-left":
-        return 0, 0
-    return -w / 2, -h  # bottom-center
+    vert, _, horz = str(anchor or "bottom-center").partition("-")
+    ox = 0 if horz == "left" else -w if horz == "right" else -w / 2
+    oy = 0 if vert == "top" else -h if vert == "bottom" else -h / 2
+    return ox, oy
+
+
+def load_actor_cels(path, spec):
+    """Cels of a sheet: a horizontal strip, or a grid when `grid` says so."""
+    im = np.array(Image.open(path).convert("RGBA"))
+    n = max(1, spec.get("frames", 1))
+    cols, rows = spec.get("grid") or (n, 1)
+    fw, fh = im.shape[1] // cols, im.shape[0] // rows
+    return [im[(i // cols) * fh : (i // cols + 1) * fh,
+               (i % cols) * fw : (i % cols + 1) * fw] for i in range(n)]
 
 
 def main():
@@ -203,14 +268,30 @@ def main():
     view_w = -(-canvas_w // zoom)
     view_h = -(-canvas_h // zoom)
 
-    layers, pieces, placement, backdrop = load_background(cfg["background"])
-    speeds = dict(DEFAULT_SPEEDS, **cfg.get("layer_speeds", {}))
-
     root = cfg.get("sprite_root", "sprites/x1")
+
+    # Two kinds of scene. The portable one lists its layers as PNGs and is what
+    # the web editor writes; the original one names a built-in background and
+    # rebuilds it from the ROM data. Actors are identical in both.
+    portable = bool(cfg.get("layers"))
+    if portable:
+        backdrop = tuple(int(cfg.get("backdrop", "#000000").lstrip("#")[i:i + 2], 16)
+                         for i in (0, 2, 4))
+        png_layers = [(spec, np.array(Image.open(os.path.join(root, spec["sprite"]))
+                                      .convert("RGBA")))
+                      for spec in cfg["layers"] if spec.get("visible", True)]
+    else:
+        layers, pieces, placement, backdrop = load_background(cfg["background"])
+        speeds = dict(DEFAULT_SPEEDS, **cfg.get("layer_speeds", {}))
+
+    world_h = cfg.get("world_height") or (WORLD_H if not portable else view_h)
+    align = cfg.get("align", "bottom")
+
     actors = []
     for spec in cfg["actors"]:
-        frames = load_actor_sheet(os.path.join(root, spec["sprite"]),
-                                  spec.get("frames", 1))
+        if not spec.get("visible", True):
+            continue
+        frames = load_actor_cels(os.path.join(root, spec["sprite"]), spec)
         actors.append((spec, frames))
 
         # An actor whose cycle doesn't divide the loop jumps when it wraps.
@@ -222,36 +303,55 @@ def main():
                   f"{cycle} frames, which does not divide the {loop}-frame loop "
                   f"— it will jump when the loop wraps")
 
+    def depth(spec):
+        return spec.get("depth", 0)
+
     indices = range(0, loop, args.step) if args.frame is None else [args.frame]
     out_frames = []
     for f in indices:
-        v = View(view_w, view_h, backdrop)
+        v = View(view_w, view_h, backdrop, world_h, align)
 
-        v.tile_layer(layers["far"], speeds["far"] * f, 0, extend_up=True)
+        if portable:
+            # layers and actors share one depth axis, so a layer can sit in front
+            drawable = ([("layer", spec, art) for spec, art in png_layers]
+                        + [("actor", spec, cels) for spec, cels in actors])
+            drawable.sort(key=lambda item: depth(item[1]))
+        else:
+            v.tile_layer(layers["far"], speeds["far"] * f, 0, extend_up=True)
 
-        # Scenery OBJs wrap over a 288 px span; slower pieces sit further back
-        for piece, x0, y0, speed in sorted(placement, key=lambda p: p[3]):
-            art = pieces[piece]
-            ph, pw = art.shape[:2]
-            base = (x0 + speed * f + 32) % 288 - 32
-            for n in range(-1, view_w // 288 + 2):
-                v.sprite(art, base + n * 288 - pw / 2, y0 - ph / 2)
+            # Scenery OBJs wrap over a 288 px span; slower pieces sit further back
+            for piece, x0, y0, speed in sorted(placement, key=lambda p: p[3]):
+                art = pieces[piece]
+                ph, pw = art.shape[:2]
+                base = (x0 + speed * f + 32) % 288 - 32
+                for n in range(-1, view_w // 288 + 2):
+                    v.sprite(art, base + n * 288 - pw / 2, y0 - ph / 2)
 
-        v.tile_layer(layers["near"], speeds["near"] * f, 0)
-        v.tile_layer(layers["ground"], speeds["ground"] * f, 0)
+            v.tile_layer(layers["near"], speeds["near"] * f, 0)
+            v.tile_layer(layers["ground"], speeds["ground"] * f, 0)
+            drawable = [("actor", spec, cels) for spec, cels in
+                        sorted(actors, key=lambda a: depth(a[0]))]
 
-        for spec, frames in sorted(actors, key=lambda a: a[0].get("depth", 0)):
-            order = spec.get("order") or list(range(len(frames)))
+        for kind, spec, art in drawable:
+            if kind == "layer":
+                v.png_layer(art, spec, f)
+                continue
+            order = spec.get("order") or list(range(len(art)))
             delay = max(1, spec.get("delay", 4))
-            frame = frames[order[int(f / delay) % len(order)]]
+            cel = art[order[int((f + spec.get("offset", 0)) / delay) % len(order)]]
+            scale = max(1, int(spec.get("scale", 1)))
+            if scale > 1:
+                cel = np.repeat(np.repeat(cel, scale, axis=0), scale, axis=1)
             if spec.get("keys"):
                 x, y = sample_keys(spec["keys"], f, loop)
             else:
                 x, y = spec.get("x", 0), spec.get("y", 0)
             mx, my = apply_motion(spec.get("motion", []), f, loop)
-            fh, fw = frame.shape[:2]
+            fh, fw = cel.shape[:2]
             ax, ay = resolve_anchor(spec.get("anchor", "bottom-center"), fw, fh)
-            v.sprite(frame, x + mx + ax, y + my + ay, spec.get("flip_x", False))
+            v.sprite(cel, x + mx + ax, y + my + ay,
+                     spec.get("flip_x", False), spec.get("flip_y", False),
+                     float(spec.get("opacity", 1)))
 
         im = Image.fromarray(v.rgb)
         if zoom != 1:

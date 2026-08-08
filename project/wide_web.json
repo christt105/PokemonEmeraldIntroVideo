@@ -1,25 +1,68 @@
 {
-  "_": "Camara alejada (zoom 3), sin Volbeat ni Flygon, Mudkip de PMD en vez de Torchic.",
-  "_coords": "x,y en pixeles GBA. El suelo esta pegado a la base del lienzo, asi que y=152 es la hierba y y menor sube. El origen de x es el borde izquierdo de lo que se ve.",
+  "format": "parallax-scene/1",
+  "name": "wide_web",
   "canvas": [
     1280,
     640
   ],
   "zoom": 3,
+  "world_height": 160,
+  "align": "bottom",
   "loop_frames": 256,
   "fps": 59.7275,
+  "backdrop": "#000000",
   "sprite_root": "sprites/x1",
-  "background": "day",
-  "_background_opciones": "day, sunset, night, ocean, ocean_sunset",
-  "layer_speeds": {
-    "far": 0,
-    "near": 1,
-    "ground": 4
-  },
+  "layers": [
+    {
+      "name": "far",
+      "sprite": "backgrounds/day/far.png",
+      "y": 0,
+      "depth": -160,
+      "speed": 0,
+      "tile_period": 128,
+      "repeat": "x",
+      "extend_up": true
+    },
+    {
+      "name": "scenery_layer_0",
+      "sprite": "backgrounds/day/scenery_layer_0.png",
+      "y": 72,
+      "depth": -155,
+      "speed": -1.125,
+      "tile_period": 288,
+      "repeat": "x"
+    },
+    {
+      "name": "scenery_layer_1",
+      "sprite": "backgrounds/day/scenery_layer_1.png",
+      "y": 72,
+      "depth": -150,
+      "speed": -2.25,
+      "tile_period": 288,
+      "repeat": "x"
+    },
+    {
+      "name": "near",
+      "sprite": "backgrounds/day/near.png",
+      "y": 57,
+      "depth": -145,
+      "speed": -1,
+      "tile_period": 128,
+      "repeat": "x"
+    },
+    {
+      "name": "ground",
+      "sprite": "backgrounds/day/ground.png",
+      "y": 96,
+      "depth": -140,
+      "speed": -4,
+      "tile_period": 128,
+      "repeat": "x"
+    }
+  ],
   "actors": [
     {
       "name": "manectric",
-      "_": "Posicion fija con un balanceo vertical: la zancada ya la hace el sprite.",
       "sprite": "pokemon/manectric_run.png",
       "frames": 4,
       "delay": 4,
@@ -38,7 +81,6 @@
     },
     {
       "name": "rider",
-      "_": "El temblorcillo de 1 px que el juego sortea al azar, aqui periodico.",
       "sprite": "characters/brendan_on_bike.png",
       "frames": 4,
       "delay": 4,
@@ -57,7 +99,6 @@
     },
     {
       "name": "mudkip",
-      "_": "Ejemplo de posiciones clave: entra por la derecha, adelanta al ciclista y se vuelve a descolgar. El ultimo tramo lo cierra solo, volviendo al primer key.",
       "sprite": "external/mudkip_walk.png",
       "frames": 3,
       "order": [

@@ -89,36 +89,45 @@ no escenario. Los tienes pedaleando y aleteando en su sitio.
 
 ## Editor visual
 
+El editor ya no vive aquí: es un proyecto aparte, sin nada de Pokémon dentro, y
+se usa desde el navegador sin instalar nada.
+
+**→ https://christt105.github.io/parallax-scene-editor/**
+(código en [christt105/parallax-scene-editor](https://github.com/christt105/parallax-scene-editor))
+
+Para editar esta escena allí hay que traducirla primero: el editor no sabe qué
+es `"background": "day"`, así que cada capa tiene que ir escrita como un PNG con
+su velocidad.
+
 ```bash
-python3 editor/serve.py
+python3 export_editor_scene.py scenes/wide.json     # -> scenes/wide_web.json
 ```
 
-y abre `http://127.0.0.1:8777/editor/`. Es el mismo `scene.json`, pero con
-una vista: la escena se reproduce en bucle mientras la editas.
+Luego, en la web, *Abrir carpeta…* y eliges la raíz de este proyecto. El editor
+lee todos los PNG (incluidos los 2100 de `decomp/`, que ignorará), abre
+`scenes/wide_web.json` y **guarda encima** cuando pulsas Guardar (pide permiso
+una vez; hace falta Chrome, Edge o Brave). Si eliges otra carpeta y las rutas no
+cuadran, el botón *Reparar rutas* las vuelve a cuadrar solo.
 
-- **Arrastra los sprites** por el lienzo para colocarlos. Si el actor tiene
-  posiciones clave, arrastrar mueve la clave seleccionada (o la más cercana al
-  fotograma en el que estés), no el actor entero.
-- **La línea de tiempo** de abajo muestra las claves del actor elegido como
-  rombos. Pinchas para moverte por el bucle, arrastras el rombo para
-  seleccionarlo, y *+ Clave aquí* añade una en el fotograma actual con la
-  posición que tenga en ese momento.
-- **El panel de la derecha** lleva cámara (zoom, fondo, duración), la lista de
-  actores y sus propiedades: sprite, retardo, profundidad, anclaje, volteo,
-  orden de fotogramas y el vaivén.
-- **Guardar** escribe `scenes/<nombre>.json` y **Renderizar GIF** lanza
-  `compose.py` y te deja el enlace. El cuadro de JSON de abajo está siempre
-  sincronizado en los dos sentidos: puedes pegar uno y darle a *Aplicar*.
+`compose.py` sigue leyendo ese archivo igual de bien:
 
-El editor avisa en rojo cuando el ciclo de un actor no divide la duración del
-bucle, que es el fallo fácil de cometer y difícil de ver.
+```bash
+python3 compose.py scenes/wide_web.json --format gif mp4
+```
 
-El dibujado del editor y el de `compose.py` son la misma lógica escrita dos
-veces, así que están comprobados uno contra otro: el mismo fotograma sale
-idéntico píxel a píxel en los 1280x640. Lo que ves es lo que se renderiza.
+El editor te avisa en rojo cuando el ciclo de un actor no divide la duración del
+bucle, que es el fallo fácil de cometer y difícil de ver, y hace lo propio con
+las capas cuyo desplazamiento no cierra sobre su periodo.
 
-Sirve el directorio del proyecto para poder leer los sprites, se ata a
-localhost, y sus dos endpoints sólo escriben y leen dentro de `scenes/`.
+Su dibujado y el de `compose.py` son la misma lógica escrita dos veces, así que
+están comprobados uno contra otro: los 1280x640 salen **idénticos píxel a
+píxel** en los fotogramas 0, 37, 96, 128, 200 y 255. Lo que ves es lo que se
+renderiza.
+
+Lo único que cambia de signo al traducir son las velocidades de las capas: el
+editor toma velocidad positiva como «el decorado se va hacia la izquierda», que
+es lo natural para un personaje que avanza a la derecha, y el juego hace lo
+contrario. El conversor lo niega solo.
 
 ## Componer la escena: `compose.py`
 
@@ -198,6 +207,40 @@ andar: los pies se quedan clavados. Sale en `sprites/x*/external/`.
 El Mudkip de Mystery Dungeon que ya está metido mide 22x22 frente a los 18x24
 de Torchic, así que la escala pega casi exacta pese a ser otro estilo. Lleva
 `flip_x` porque mira al lado contrario que el resto.
+
+## Ajustar sprites de fuera al estilo
+
+Los sprites de otros juegos suelen llevar contorno negro plano. **Los de la
+intro de Esmeralda no usan negro en ningún sitio**: el contorno toma un tono
+oscurecido de aquello que rodea. Torchic lleva el 52% del contorno en
+`#836229` —un marrón sacado de su propio naranja— y el 48% restante en el gris
+cálido `#524a4a` que comparte toda la escena. Manectric va 70% gris, 23% oliva
+oscuro y 6% azul.
+
+```bash
+python3 restyle_sprite.py sprites/x1/external/mudkip_walk.png
+```
+
+Busca los píxeles de tinta, mira qué color tienen alrededor y los sustituye
+por su versión oscura. Vale igual para las líneas interiores (una boca, la
+separación de dos aletas), que se tiñen de lo que tengan debajo en vez de
+quedarse grises.
+
+El factor por defecto, 0,55, está **ajustado contra los sprites originales**:
+reproduce el contorno de Torchic con un error de 6 por canal. Probé también a
+subir la saturación —la melena de Manectric pasa de S 63 a S 95— pero medido
+sobre los tres casos que se pueden comparar, empeora el ajuste general, así
+que `--sat` existe pero por defecto no toca nada.
+
+Con `--blend` tiras del contorno hacia el gris cálido de la escena, si buscas
+que un sprite se integre más y destaque menos.
+
+Al Mudkip le quitó los 189 píxeles negros y lo dejó en 16 colores, que da la
+casualidad de que es justo el máximo de una paleta de GBA.
+
+Lo que esto **no** arregla es el estilo de dibujo. El Mudkip es una vista de
+tres cuartos de Mystery Dungeon y los de la escena son perfiles puros; eso es
+redibujar, no recolorear.
 
 ## Cambiar los Pokémon
 
