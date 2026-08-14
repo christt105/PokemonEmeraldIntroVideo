@@ -1,5 +1,4 @@
 {
-  "format": "parallax-scene/1",
   "name": "wide_web",
   "canvas": [
     1280,
@@ -7,20 +6,14 @@
   ],
   "zoom": 3,
   "world_height": 160,
-  "align": "bottom",
   "loop_frames": 256,
   "fps": 59.7275,
-  "backdrop": "#000000",
-  "sprite_root": "sprites/x1",
   "layers": [
     {
       "name": "far",
       "sprite": "backgrounds/day/far.png",
-      "y": 0,
       "depth": -160,
-      "speed": 0,
       "tile_period": 128,
-      "repeat": "x",
       "extend_up": true
     },
     {
@@ -29,26 +22,23 @@
       "y": 72,
       "depth": -155,
       "speed": -1.125,
-      "tile_period": 288,
-      "repeat": "x"
+      "tile_period": 288
     },
     {
       "name": "scenery_layer_1",
       "sprite": "backgrounds/day/scenery_layer_1.png",
       "y": 72,
       "depth": -150,
-      "speed": -2.25,
-      "tile_period": 288,
-      "repeat": "x"
+      "speed": -1.125,
+      "tile_period": 288
     },
     {
       "name": "near",
       "sprite": "backgrounds/day/near.png",
       "y": 57,
-      "depth": -145,
+      "depth": -144,
       "speed": -1,
-      "tile_period": 128,
-      "repeat": "x"
+      "tile_period": 128
     },
     {
       "name": "ground",
@@ -56,8 +46,7 @@
       "y": 96,
       "depth": -140,
       "speed": -4,
-      "tile_period": 128,
-      "repeat": "x"
+      "tile_period": 128
     }
   ],
   "actors": [
@@ -65,10 +54,8 @@
       "name": "manectric",
       "sprite": "pokemon/manectric_run.png",
       "frames": 4,
-      "delay": 4,
       "x": 70,
       "y": 152,
-      "anchor": "bottom-center",
       "depth": 30,
       "motion": [
         {
@@ -83,10 +70,8 @@
       "name": "rider",
       "sprite": "characters/brendan_on_bike.png",
       "frames": 4,
-      "delay": 4,
       "x": 360,
       "y": 120,
-      "anchor": "bottom-center",
       "depth": 20,
       "motion": [
         {
@@ -99,16 +84,14 @@
     },
     {
       "name": "mudkip",
-      "sprite": "external/mudkip_walk.png",
+      "sprite": "pokemon/mudkip_walk.png",
       "frames": 3,
       "order": [
         0,
         1,
         2
       ],
-      "delay": 4,
-      "flip_x": false,
-      "anchor": "bottom-center",
+      "delay": 5,
       "depth": 25,
       "motion": [
         {
@@ -121,5 +104,6 @@
       "x": 343,
       "y": 147
     }
-  ]
+  ],
+  "format": "parallax-scene/1"
 }
