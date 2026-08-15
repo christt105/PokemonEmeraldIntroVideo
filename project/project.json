@@ -11,10 +11,19 @@
   "layers": [
     {
       "name": "far",
+      "sprite": "backgrounds/ocean/far.png",
+      "repeat": "none",
+      "extend_up": true,
+      "depth": -170
+    },
+    {
+      "name": "far",
       "sprite": "backgrounds/day/far.png",
       "depth": -160,
       "tile_period": 128,
-      "extend_up": true
+      "repeat": "none",
+      "extend_up": true,
+      "extend_down": true
     },
     {
       "name": "scenery_layer_0",
@@ -45,7 +54,7 @@
       "sprite": "backgrounds/day/ground.png",
       "y": 96,
       "depth": -140,
-      "speed": -4,
+      "speed": -2.25,
       "tile_period": 128
     }
   ],
@@ -54,8 +63,8 @@
       "name": "manectric",
       "sprite": "pokemon/manectric_run.png",
       "frames": 4,
-      "x": 70,
-      "y": 152,
+      "x": 233,
+      "y": 132,
       "depth": 30,
       "motion": [
         {
@@ -64,7 +73,8 @@
           "amp": 2,
           "period": 64
         }
-      ]
+      ],
+      "visible": false
     },
     {
       "name": "rider",
@@ -86,11 +96,6 @@
       "name": "mudkip",
       "sprite": "pokemon/mudkip_walk.png",
       "frames": 3,
-      "order": [
-        0,
-        1,
-        2
-      ],
       "delay": 5,
       "depth": 25,
       "motion": [
@@ -101,8 +106,37 @@
           "period": 32
         }
       ],
-      "x": 343,
-      "y": 147
+      "x": 309,
+      "y": 140
+    },
+    {
+      "name": "tropius_fly",
+      "sprite": "pokemon/tropius_fly.png",
+      "frames": 12,
+      "order": [
+        4,
+        5,
+        4,
+        5,
+        4,
+        5,
+        4,
+        5,
+        4,
+        5
+      ],
+      "x": 119,
+      "y": 37,
+      "motion": [
+        {
+          "type": "sine",
+          "axis": "y",
+          "amp": 2,
+          "period": 64
+        }
+      ],
+      "depth": 40,
+      "visible": false
     }
   ],
   "format": "parallax-scene/1"
