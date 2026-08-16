@@ -4,7 +4,6 @@
     1280,
     640
   ],
-  "zoom": 3,
   "world_height": 160,
   "loop_frames": 256,
   "fps": 59.7275,
@@ -30,7 +29,7 @@
       "sprite": "backgrounds/day/scenery_layer_0.png",
       "y": 72,
       "depth": -155,
-      "speed": -1.125,
+      "speed": 1.125,
       "tile_period": 288
     },
     {
@@ -38,7 +37,7 @@
       "sprite": "backgrounds/day/scenery_layer_1.png",
       "y": 72,
       "depth": -150,
-      "speed": -1.125,
+      "speed": 1.125,
       "tile_period": 288
     },
     {
@@ -46,7 +45,7 @@
       "sprite": "backgrounds/day/near.png",
       "y": 57,
       "depth": -144,
-      "speed": -1,
+      "speed": 1,
       "tile_period": 128
     },
     {
@@ -54,7 +53,7 @@
       "sprite": "backgrounds/day/ground.png",
       "y": 96,
       "depth": -140,
-      "speed": -2.25,
+      "speed": 2.25,
       "tile_period": 128
     }
   ],
@@ -80,17 +79,20 @@
       "name": "rider",
       "sprite": "characters/brendan_on_bike.png",
       "frames": 4,
-      "x": 360,
-      "y": 120,
+      "x": 76,
+      "y": 124,
       "depth": 20,
       "motion": [
         {
           "type": "wobble",
           "axis": "y",
-          "amp": 1,
-          "hold": 8
+          "amp": 2,
+          "period": 8,
+          "hold": 11
         }
-      ]
+      ],
+      "delay": 6,
+      "flip_x": true
     },
     {
       "name": "mudkip",
@@ -103,11 +105,13 @@
           "type": "sine",
           "axis": "y",
           "amp": 1,
-          "period": 32
+          "period": 15,
+          "phase": 0
         }
       ],
-      "x": 309,
-      "y": 140
+      "x": 127,
+      "y": 144,
+      "flip_x": true
     },
     {
       "name": "tropius_fly",
@@ -139,5 +143,6 @@
       "visible": false
     }
   ],
-  "format": "parallax-scene/1"
+  "format": "parallax-scene/1",
+  "zoom": 2
 }
