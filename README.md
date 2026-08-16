@@ -1,5 +1,7 @@
 # Pokémon Emerald Bicycle Ride - Parallax Scene Project
 
+![Result](./out/project.gif)
+
 A pre-configured parallax animation scene project for the **[Parallax Scene Editor](https://github.com/christt105/parallax-scene-editor)** ([Live Web App](https://christt105.github.io/parallax-scene-editor/)), recreating the iconic Pokémon Emerald bicycle ride intro and credits sequence.
 
 ---
