@@ -73,7 +73,8 @@
           "period": 64
         }
       ],
-      "flip_x": true
+      "flip_x": true,
+      "visible": false
     },
     {
       "name": "rider",
@@ -140,7 +141,8 @@
         }
       ],
       "depth": 40,
-      "flip_x": true
+      "flip_x": true,
+      "visible": false
     }
   ],
   "format": "parallax-scene/1",
