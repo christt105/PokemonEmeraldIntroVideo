@@ -1,0 +1,49 @@
+name: Export preview
+
+# Renders project/project.json through a parallax-scene-editor checkout in
+# headless Chromium and commits the result back to out/. Triggered by pushes
+# to main so a speed/layout fix shows up as an updated preview without
+# needing the editor open locally.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['out/**']
+  workflow_dispatch:
+
+concurrency:
+  group: export-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Checkout parallax-scene-editor
+        uses: actions/checkout@v4
+        with:
+          repository: christt105/parallax-scene-editor
+          path: parallax-scene-editor
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Render gif + webm
+        run: npm run export
+        env:
+          EDITOR_DIR: ${{ github.workspace }}/parallax-scene-editor
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: regenerate preview gif/webm"
+          file_pattern: out/*

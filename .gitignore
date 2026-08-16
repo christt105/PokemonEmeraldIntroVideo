@@ -2,3 +2,4 @@
 __pycache__
 decomp/*
 .claude
+node_modules/
