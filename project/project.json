@@ -45,7 +45,7 @@
       "sprite": "backgrounds/day/near.png",
       "y": 57,
       "depth": -144,
-      "speed": 1,
+      "speed": 1.5,
       "tile_period": 128
     },
     {
