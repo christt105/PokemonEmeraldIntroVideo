@@ -1,5 +1,5 @@
 {
-  "name": "wide_web",
+  "name": "project",
   "canvas": [
     1280,
     640
@@ -86,12 +86,12 @@
         {
           "type": "wobble",
           "axis": "y",
-          "amp": 2,
+          "amp": 1,
           "period": 8,
-          "hold": 11
+          "hold": 8
         }
       ],
-      "delay": 6,
+      "delay": 8,
       "flip_x": true
     },
     {
