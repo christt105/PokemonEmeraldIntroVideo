@@ -62,8 +62,8 @@
       "name": "manectric",
       "sprite": "pokemon/manectric_run.png",
       "frames": 4,
-      "x": 233,
-      "y": 132,
+      "x": 401,
+      "y": 123,
       "depth": 30,
       "motion": [
         {
@@ -73,7 +73,7 @@
           "period": 64
         }
       ],
-      "visible": false
+      "flip_x": true
     },
     {
       "name": "rider",
@@ -129,8 +129,8 @@
         4,
         5
       ],
-      "x": 119,
-      "y": 37,
+      "x": 218,
+      "y": 22,
       "motion": [
         {
           "type": "sine",
@@ -140,7 +140,7 @@
         }
       ],
       "depth": 40,
-      "visible": false
+      "flip_x": true
     }
   ],
   "format": "parallax-scene/1",
