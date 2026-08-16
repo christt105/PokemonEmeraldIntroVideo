@@ -2,7 +2,7 @@
   "name": "project",
   "canvas": [
     1280,
-    640
+    480
   ],
   "world_height": 160,
   "loop_frames": 256,
