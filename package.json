@@ -1,0 +1,12 @@
+{
+  "name": "pokemon-emerald-intro-video",
+  "private": true,
+  "type": "module",
+  "description": "Parallax scene project recreating the Pokémon Emerald bicycle intro",
+  "scripts": {
+    "export": "node tools/export.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
